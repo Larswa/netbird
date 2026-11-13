@@ -40,6 +40,10 @@ const (
 	// DefaultAdminURL points to NetBird's cloud management console. It is only
 	// reported by the deprecated mobile admin URL getters.
 	DefaultAdminURL = "https://app.netbird.io:443"
+
+	// DefaultServerSSHRedirectPort is the port on the NetBird address that is
+	// redirected to the embedded SSH server unless configured otherwise.
+	DefaultServerSSHRedirectPort uint16 = 22
 )
 
 // mgmProber is the subset of management client needed for URL migration probes.
@@ -73,6 +77,7 @@ type ConfigInput struct {
 	EnableSSHRemotePortForwarding *bool
 	DisableSSHAuth                *bool
 	SSHJWTCacheTTL                *int
+	ServerSSHRedirectPort         *uint16
 	NATExternalIPs                []string
 	CustomDNSAddress              []byte
 	RosenpassEnabled              *bool
@@ -135,6 +140,9 @@ type Config struct {
 	EnableSSHRemotePortForwarding *bool
 	DisableSSHAuth                *bool
 	SSHJWTCacheTTL                *int
+	// ServerSSHRedirectPort is redirected to the embedded SSH server's listen
+	// port on the NetBird address. Zero installs no redirect.
+	ServerSSHRedirectPort *uint16
 
 	DisableClientRoutes bool
 	DisableServerRoutes bool
@@ -391,6 +399,12 @@ func (config *Config) resolveUnsetDefaults() (updated bool) {
 		updated = true
 	}
 
+	if config.ServerSSHRedirectPort == nil {
+		port := DefaultServerSSHRedirectPort
+		config.ServerSSHRedirectPort = &port
+		updated = true
+	}
+
 	if config.NetworkMonitor == nil {
 		// network monitoring is on by default on windows and darwin clients
 		enabled := runtime.GOOS == "windows" || runtime.GOOS == "darwin"
@@ -478,6 +492,21 @@ func (config *Config) EnsureIdentity() (bool, error) {
 	}
 
 	return generated, nil
+}
+
+// applyServerSSHRedirectPort sets the SSH redirect port when port differs from
+// the stored one, and reports whether it did.
+func (config *Config) applyServerSSHRedirectPort(port *uint16) bool {
+	if port == nil || *port == *config.ServerSSHRedirectPort {
+		return false
+	}
+	if *port == 0 {
+		log.Infof("disabling SSH port redirection")
+	} else {
+		log.Infof("updating SSH redirect port to %d", *port)
+	}
+	config.ServerSSHRedirectPort = port
+	return true
 }
 
 func (config *Config) apply(input ConfigInput) (updated bool, err error) {
@@ -701,6 +730,10 @@ func (config *Config) apply(input ConfigInput) (updated bool, err error) {
 	if input.SSHJWTCacheTTL != nil && *input.SSHJWTCacheTTL != *config.SSHJWTCacheTTL {
 		log.Infof("updating SSH JWT cache TTL to %d seconds", *input.SSHJWTCacheTTL)
 		config.SSHJWTCacheTTL = input.SSHJWTCacheTTL
+		updated = true
+	}
+
+	if config.applyServerSSHRedirectPort(input.ServerSSHRedirectPort) {
 		updated = true
 	}
 

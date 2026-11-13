@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"math"
 	"net/url"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -230,6 +233,94 @@ func TestRequirePrivilegeForConfigChange_SSHFlags(t *testing.T) {
 			assertAllowed(t, err)
 		})
 	}
+}
+
+func TestRequirePrivilegeForConfigChange_SSHRedirectPort(t *testing.T) {
+	port := func(v uint16) *uint16 { return &v }
+	wire := func(v uint32) *uint32 { return &v }
+
+	tests := []struct {
+		name       string
+		stored     *profilemanager.Config
+		requested  *uint32
+		privileged bool
+		wantDeny   bool
+	}{
+		{
+			name:      "moving the redirect unprivileged is refused",
+			stored:    &profilemanager.Config{ServerSSHRedirectPort: port(22)},
+			requested: wire(22000),
+			wantDeny:  true,
+		},
+		{
+			// Dropping the redirect hands the overlay's port 22 to the host's
+			// own sshd, so it is guarded like any other move.
+			name:      "disabling the redirect unprivileged is refused",
+			stored:    &profilemanager.Config{ServerSSHRedirectPort: port(22)},
+			requested: wire(0),
+			wantDeny:  true,
+		},
+		{
+			name:       "moving the redirect as root is allowed",
+			stored:     &profilemanager.Config{ServerSSHRedirectPort: port(22)},
+			requested:  wire(22000),
+			privileged: true,
+		},
+		{
+			name:      "restating the stored port is not a change",
+			stored:    &profilemanager.Config{ServerSSHRedirectPort: port(22000)},
+			requested: wire(22000),
+		},
+		{
+			name:      "restating the default against a config without the field is not a change",
+			stored:    &profilemanager.Config{},
+			requested: wire(uint32(profilemanager.DefaultServerSSHRedirectPort)),
+		},
+		{
+			name:      "restating the default for a profile with no config yet is not a change",
+			stored:    nil,
+			requested: wire(uint32(profilemanager.DefaultServerSSHRedirectPort)),
+		},
+		{
+			name:   "a request without the field is allowed",
+			stored: &profilemanager.Config{ServerSSHRedirectPort: port(22000)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := userCtx()
+			if tt.privileged {
+				ctx = rootCtx()
+			}
+			err := requirePrivilegeForConfigChange(ctx, tt.stored, privilegedConfigChange{sshRedirectPort: tt.requested})
+			if tt.wantDeny {
+				assertDenied(t, err)
+				return
+			}
+			assertAllowed(t, err)
+		})
+	}
+}
+
+func TestSetSSHRedirectPort(t *testing.T) {
+	var absent profilemanager.ConfigInput
+	require.NoError(t, setSSHRedirectPort(&absent, nil))
+	assert.Nil(t, absent.ServerSSHRedirectPort, "an absent field leaves the stored value alone")
+
+	for _, v := range []uint32{0, 22, 22000, math.MaxUint16} {
+		var input profilemanager.ConfigInput
+		require.NoError(t, setSSHRedirectPort(&input, &v))
+		require.NotNil(t, input.ServerSSHRedirectPort)
+		assert.Equal(t, uint16(v), *input.ServerSSHRedirectPort, "port %d must pass through unchanged", v)
+	}
+
+	// 65536+22 would truncate to 22; it has to be refused instead.
+	tooBig := uint32(math.MaxUint16 + 23)
+	var input profilemanager.ConfigInput
+	err := setSSHRedirectPort(&input, &tooBig)
+	assert.Equal(t, codes.InvalidArgument, gstatus.Code(err), "out-of-range port must be refused")
+	assert.Nil(t, input.ServerSSHRedirectPort, "a refused port must not be set")
 }
 
 func TestRequirePrivilegeForConfigChange_LocalMetrics(t *testing.T) {

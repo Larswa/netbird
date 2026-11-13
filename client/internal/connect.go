@@ -660,6 +660,13 @@ func (c *ConnectClient) SetSyncResponsePersistence(enabled bool) {
 	}
 }
 
+func serverSSHRedirectPort(port *uint16) uint16 {
+	if port == nil {
+		return profilemanager.DefaultServerSSHRedirectPort
+	}
+	return *port
+}
+
 // createEngineConfig converts configuration received from Management Service to EngineConfig
 func createEngineConfig(key wgtypes.Key, config *profilemanager.Config, peerConfig *mgmProto.PeerConfig, logPath string) (*EngineConfig, error) {
 	nm := false
@@ -697,6 +704,7 @@ func createEngineConfig(key wgtypes.Key, config *profilemanager.Config, peerConf
 		EnableSSHLocalPortForwarding:  config.EnableSSHLocalPortForwarding,
 		EnableSSHRemotePortForwarding: config.EnableSSHRemotePortForwarding,
 		DisableSSHAuth:                config.DisableSSHAuth,
+		ServerSSHRedirectPort:         serverSSHRedirectPort(config.ServerSSHRedirectPort),
 		DNSRouteInterval:              config.DNSRouteInterval,
 
 		DisableClientRoutes: config.DisableClientRoutes,

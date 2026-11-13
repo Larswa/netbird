@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -675,7 +676,24 @@ func (s *Server) setConfigInputFromRequest(msg *proto.SetConfigRequest, resolved
 		mtu := uint16(*msg.Mtu)
 		config.MTU = &mtu
 	}
+	if err := setSSHRedirectPort(&config, msg.ServerSSHRedirectPort); err != nil {
+		return config, err
+	}
 	return config, nil
+}
+
+// setSSHRedirectPort narrows the wire value to a port, refusing values that do
+// not fit rather than truncating them to an unrelated port.
+func setSSHRedirectPort(config *profilemanager.ConfigInput, requested *uint32) error {
+	if requested == nil {
+		return nil
+	}
+	if *requested > math.MaxUint16 {
+		return gstatus.Errorf(codes.InvalidArgument, "SSH redirect port %d out of range", *requested)
+	}
+	port := uint16(*requested)
+	config.ServerSSHRedirectPort = &port
+	return nil
 }
 
 // Login uses setup key to prepare configuration for the daemon.
@@ -2518,6 +2536,7 @@ func (s *Server) GetConfig(ctx context.Context, req *proto.GetConfigRequest) (*p
 		EnableSSHRemotePortForwarding: enableSSHRemotePortForwarding,
 		DisableSSHAuth:                disableSSHAuth,
 		SshJWTCacheTTL:                sshJWTCacheTTL,
+		ServerSSHRedirectPort:         uint32(storedSSHRedirectPort(cfg)),
 		MDMManagedFields:              cfg.Policy().ManagedKeys(),
 	}, nil
 }

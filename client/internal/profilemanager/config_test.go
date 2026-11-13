@@ -3,6 +3,7 @@ package profilemanager
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -450,6 +451,41 @@ func TestUpdateOldManagementURL(t *testing.T) {
 			} else {
 				require.NotEqual(t, string(previousContent), string(newContent), "file should have changed")
 			}
+		})
+	}
+}
+
+func TestServerSSHRedirectPort(t *testing.T) {
+	t.Run("a new config redirects the default port", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "new.json")
+		cfg, err := UpdateOrCreateConfig(ConfigInput{ConfigPath: path})
+		require.NoError(t, err)
+		require.NotNil(t, cfg.ServerSSHRedirectPort)
+		assert.Equal(t, DefaultServerSSHRedirectPort, *cfg.ServerSSHRedirectPort, "redirect port of a new config")
+	})
+
+	t.Run("a config that predates the field redirects the default port", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "legacy.json")
+		require.NoError(t, os.WriteFile(path, []byte(`{"WgIface":"wt0"}`), 0o600))
+
+		cfg, err := GetExistingConfig(path)
+		require.NoError(t, err)
+		require.NotNil(t, cfg.ServerSSHRedirectPort)
+		assert.Equal(t, DefaultServerSSHRedirectPort, *cfg.ServerSSHRedirectPort, "redirect port of a legacy config")
+	})
+
+	// Zero means "no redirect", so it must survive a reload rather than be
+	// mistaken for an unset value and reset to the default.
+	for _, port := range []uint16{22000, 0} {
+		t.Run(fmt.Sprintf("port %d persists", port), func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "set.json")
+			_, err := UpdateOrCreateConfig(ConfigInput{ConfigPath: path, ServerSSHRedirectPort: &port})
+			require.NoError(t, err)
+
+			cfg, err := GetExistingConfig(path)
+			require.NoError(t, err)
+			require.NotNil(t, cfg.ServerSSHRedirectPort)
+			assert.Equal(t, port, *cfg.ServerSSHRedirectPort, "redirect port after a reload")
 		})
 	}
 }
