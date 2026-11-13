@@ -465,6 +465,10 @@ func setSSHSetConfigFields(req *proto.SetConfigRequest, cmd *cobra.Command) {
 		sshJWTCacheTTL32 := int32(sshJWTCacheTTL)
 		req.SshJWTCacheTTL = &sshJWTCacheTTL32
 	}
+	if cmd.Flag(serverSSHRedirectPortFlag).Changed {
+		port := uint32(serverSSHRedirectPort)
+		req.ServerSSHRedirectPort = &port
+	}
 }
 
 // refusedSettingsUpdate reports whether err is the daemon refusing the settings
@@ -619,6 +623,10 @@ func setupConfig(customDNSAddressConverted []byte, cmd *cobra.Command, configFil
 
 	if cmd.Flag(sshJWTCacheTTLFlag).Changed {
 		ic.SSHJWTCacheTTL = &sshJWTCacheTTL
+	}
+
+	if cmd.Flag(serverSSHRedirectPortFlag).Changed {
+		ic.ServerSSHRedirectPort = &serverSSHRedirectPort
 	}
 
 	if cmd.Flag(interfaceNameFlag).Changed {

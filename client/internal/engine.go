@@ -152,6 +152,9 @@ type EngineConfig struct {
 	EnableSSHLocalPortForwarding  *bool
 	EnableSSHRemotePortForwarding *bool
 	DisableSSHAuth                *bool
+	// ServerSSHRedirectPort is redirected to the SSH server's listen port on
+	// the NetBird address. Zero installs no redirect.
+	ServerSSHRedirectPort uint16
 
 	DNSRouteInterval time.Duration
 

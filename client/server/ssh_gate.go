@@ -46,6 +46,7 @@ type privilegedConfigChange struct {
 	disableSSHAuth      *bool
 	enableLocalMetrics  *bool
 	localMetricsAddress *string
+	sshRedirectPort     *uint32
 }
 
 func privilegedChangeFromSetConfig(msg *proto.SetConfigRequest) privilegedConfigChange {
@@ -57,6 +58,7 @@ func privilegedChangeFromSetConfig(msg *proto.SetConfigRequest) privilegedConfig
 		disableSSHAuth:      msg.DisableSSHAuth,
 		enableLocalMetrics:  msg.EnableLocalMetrics,
 		localMetricsAddress: msg.LocalMetricsAddress,
+		sshRedirectPort:     msg.ServerSSHRedirectPort,
 	}
 }
 
@@ -99,6 +101,13 @@ func requirePrivilegeForConfigChange(ctx context.Context, stored *profilemanager
 	// off and turning it on requires privilege.
 	if enables(storedFlag(stored, func(c *profilemanager.Config) *bool { return c.RemoteJobsAllowed }), change.remoteJobsAllowed) {
 		return denyPrivileged(ctx, "enabling remote jobs", ipcauth.UpCommand("--allow-remote-jobs"))
+	}
+
+	// The redirect decides which overlay port is diverted to the SSH server, and
+	// whether the host's own sshd is reachable from peers instead.
+	if changesSSHRedirectPort(stored, change.sshRedirectPort) {
+		return denyPrivileged(ctx, "changing the NetBird SSH redirect port",
+			ipcauth.UpCommand(fmt.Sprintf("--server-ssh-redirect-port %d", *change.sshRedirectPort)))
 	}
 
 	if addr, exposes := exposesLocalMetrics(stored, change); exposes {
@@ -230,6 +239,24 @@ func sshServerCurrentlyAllowed(cfg *profilemanager.Config) *bool {
 		return nil
 	}
 	return &enabled
+}
+
+// storedSSHRedirectPort is the redirect port the profile runs with, applying
+// the default to a config that has none yet or predates the field.
+func storedSSHRedirectPort(cfg *profilemanager.Config) uint16 {
+	if cfg == nil || cfg.ServerSSHRedirectPort == nil {
+		return profilemanager.DefaultServerSSHRedirectPort
+	}
+	return *cfg.ServerSSHRedirectPort
+}
+
+// changesSSHRedirectPort reports whether requested differs from the stored
+// redirect port. A request restating the effective value is not a change.
+func changesSSHRedirectPort(stored *profilemanager.Config, requested *uint32) bool {
+	if requested == nil {
+		return false
+	}
+	return *requested != uint32(storedSSHRedirectPort(stored))
 }
 
 // exposesLocalMetrics reports whether the change would leave the metrics

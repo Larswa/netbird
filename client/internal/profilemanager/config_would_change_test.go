@@ -30,6 +30,8 @@ func strPointer(s string) *string { return &s }
 
 func intPtr(i int) *int { return &i }
 
+func uint16Ptr(i uint16) *uint16 { return &i }
+
 func TestWouldChange(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -387,7 +389,7 @@ func unsetOnDisk(t *testing.T, path string, fields ...string) {
 	require.NoError(t, os.WriteFile(path, rewritten, 0600))
 }
 
-// Seven fields mean "the effective default" when they hold no value, and every
+// These fields mean "the effective default" when they hold no value, and every
 // profile written before apply() resolved them holds them as null. Restating
 // that default is asking for no change — and the CLI restates it on every
 // `netbird up`, because a flag set through an environment variable is a flag
@@ -417,6 +419,9 @@ func TestWouldChangeIgnoresRestatedDefaultsOfUnsetFields(t *testing.T) {
 			ConfigInput{DisableSSHAuth: boolPtr(false)}, ConfigInput{DisableSSHAuth: boolPtr(true)}},
 		{"SSHJWTCacheTTL",
 			ConfigInput{SSHJWTCacheTTL: intPtr(0)}, ConfigInput{SSHJWTCacheTTL: intPtr(300)}},
+		{"ServerSSHRedirectPort",
+			ConfigInput{ServerSSHRedirectPort: uint16Ptr(DefaultServerSSHRedirectPort)},
+			ConfigInput{ServerSSHRedirectPort: uint16Ptr(22000)}},
 		{"NetworkMonitor",
 			ConfigInput{NetworkMonitor: boolPtr(networkMonitorDefault)}, ConfigInput{NetworkMonitor: boolPtr(!networkMonitorDefault)}},
 	}

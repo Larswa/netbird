@@ -28,8 +28,25 @@ type sshServer interface {
 	AuthConfig() *sshauth.Config
 }
 
+// sshRedirectPort returns the port redirected to the SSH server's listen port,
+// and false when no redirect is wanted: the port is disabled, or it is the
+// listen port itself.
+func (e *Engine) sshRedirectPort() (uint16, bool) {
+	port := e.config.ServerSSHRedirectPort
+	if port == 0 || port == sshserver.InternalSSHPort {
+		return 0, false
+	}
+	return port, true
+}
+
 func (e *Engine) setupSSHPortRedirection() error {
 	if e.firewall == nil || e.wgInterface == nil {
+		return nil
+	}
+
+	port, ok := e.sshRedirectPort()
+	if !ok {
+		log.Infof("SSH port redirection disabled, SSH server reachable on port %d", sshserver.InternalSSHPort)
 		return nil
 	}
 
@@ -38,16 +55,16 @@ func (e *Engine) setupSSHPortRedirection() error {
 		return errors.New("invalid local NetBird address")
 	}
 
-	if err := e.firewall.AddInboundDNAT(localAddr, firewallManager.ProtocolTCP, 22, 22022); err != nil {
+	if err := e.firewall.AddInboundDNAT(localAddr, firewallManager.ProtocolTCP, port, sshserver.InternalSSHPort); err != nil {
 		return fmt.Errorf("add SSH port redirection: %w", err)
 	}
-	log.Infof("SSH port redirection enabled: %s:22 -> %s:22022", localAddr, localAddr)
+	log.Infof("SSH port redirection enabled: %s:%d -> %s:%d", localAddr, port, localAddr, sshserver.InternalSSHPort)
 
 	if v6 := e.wgInterface.Address().IPv6; v6.IsValid() {
-		if err := e.firewall.AddInboundDNAT(v6, firewallManager.ProtocolTCP, 22, 22022); err != nil {
+		if err := e.firewall.AddInboundDNAT(v6, firewallManager.ProtocolTCP, port, sshserver.InternalSSHPort); err != nil {
 			log.Warnf("failed to add IPv6 SSH port redirection: %v", err)
 		} else {
-			log.Infof("SSH port redirection enabled: [%s]:22 -> [%s]:22022", v6, v6)
+			log.Infof("SSH port redirection enabled: [%s]:%d -> [%s]:%d", v6, port, v6, sshserver.InternalSSHPort)
 		}
 	}
 
@@ -352,18 +369,23 @@ func (e *Engine) cleanupSSHPortRedirection() error {
 		return nil
 	}
 
+	port, ok := e.sshRedirectPort()
+	if !ok {
+		return nil
+	}
+
 	localAddr := e.wgInterface.Address().IP
 	if !localAddr.IsValid() {
 		return errors.New("invalid local NetBird address")
 	}
 
-	if err := e.firewall.RemoveInboundDNAT(localAddr, firewallManager.ProtocolTCP, 22, 22022); err != nil {
+	if err := e.firewall.RemoveInboundDNAT(localAddr, firewallManager.ProtocolTCP, port, sshserver.InternalSSHPort); err != nil {
 		return fmt.Errorf("remove SSH port redirection: %w", err)
 	}
-	log.Debugf("SSH port redirection removed: %s:22 -> %s:22022", localAddr, localAddr)
+	log.Debugf("SSH port redirection removed: %s:%d -> %s:%d", localAddr, port, localAddr, sshserver.InternalSSHPort)
 
 	if v6 := e.wgInterface.Address().IPv6; v6.IsValid() {
-		if err := e.firewall.RemoveInboundDNAT(v6, firewallManager.ProtocolTCP, 22, 22022); err != nil {
+		if err := e.firewall.RemoveInboundDNAT(v6, firewallManager.ProtocolTCP, port, sshserver.InternalSSHPort); err != nil {
 			log.Debugf("failed to remove IPv6 SSH port redirection: %v", err)
 		}
 	}

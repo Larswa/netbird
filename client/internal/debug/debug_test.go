@@ -860,6 +860,7 @@ func TestAddConfig_AllFieldsCovered(t *testing.T) {
 	mURL, _ := url.Parse("https://api.example.com:443")
 	bTrue := true
 	iVal := 42
+	redirectPort := uint16(22000)
 	cfg := &profilemanager.Config{
 		PrivateKey:                    "priv",
 		PreSharedKey:                  "psk",
@@ -879,6 +880,7 @@ func TestAddConfig_AllFieldsCovered(t *testing.T) {
 		EnableSSHRemotePortForwarding: &bTrue,
 		DisableSSHAuth:                &bTrue,
 		SSHJWTCacheTTL:                &iVal,
+		ServerSSHRedirectPort:         &redirectPort,
 		DisableClientRoutes:           true,
 		DisableServerRoutes:           true,
 		DisableDNS:                    true,

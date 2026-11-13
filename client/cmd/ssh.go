@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/netbirdio/netbird/client/internal"
+	"github.com/netbirdio/netbird/client/internal/profilemanager"
 	sshclient "github.com/netbirdio/netbird/client/ssh/client"
 	"github.com/netbirdio/netbird/client/ssh/detection"
 	sshproxy "github.com/netbirdio/netbird/client/ssh/proxy"
@@ -37,6 +38,7 @@ const (
 	enableSSHRemotePortForwardFlag = "enable-ssh-remote-port-forwarding"
 	disableSSHAuthFlag             = "disable-ssh-auth"
 	sshJWTCacheTTLFlag             = "ssh-jwt-cache-ttl"
+	serverSSHRedirectPortFlag      = "server-ssh-redirect-port"
 )
 
 var (
@@ -62,6 +64,7 @@ var (
 	enableSSHRemotePortForward bool
 	disableSSHAuth             bool
 	sshJWTCacheTTL             int
+	serverSSHRedirectPort      uint16
 )
 
 func init() {
@@ -72,6 +75,8 @@ func init() {
 	upCmd.PersistentFlags().BoolVar(&enableSSHRemotePortForward, enableSSHRemotePortForwardFlag, false, "Enable remote port forwarding for SSH server")
 	upCmd.PersistentFlags().BoolVar(&disableSSHAuth, disableSSHAuthFlag, false, "Disable SSH authentication")
 	upCmd.PersistentFlags().IntVar(&sshJWTCacheTTL, sshJWTCacheTTLFlag, 0, "SSH JWT token cache TTL in seconds (0=disabled)")
+	upCmd.PersistentFlags().Uint16Var(&serverSSHRedirectPort, serverSSHRedirectPortFlag, profilemanager.DefaultServerSSHRedirectPort,
+		fmt.Sprintf("Port on the NetBird address redirected to the SSH server, which listens on %d (0=no redirect)", sshserver.InternalSSHPort))
 
 	sshCmd.PersistentFlags().IntVarP(&port, "port", "p", sshserver.DefaultSSHPort, "Remote SSH port")
 	sshCmd.PersistentFlags().StringVarP(&username, "user", "u", "", sshUsernameDesc)
